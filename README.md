@@ -4,8 +4,10 @@ It is called "TV-Bug" and was created in 1978
 for experimenting with the Motorola MC6847 VDG.
 
 I have tested it to compile using the "AS0.exe"
-from the simtel archive.
-
+from the simtel archive using DOSBOX.
+( Link is below, the tool is in the MotoASMS.ZIP
+of Simtel-MSDOS-Sep1996-CD2.iso , in directory:
+E:\DISC2\CROSSASM\MOTOASMS.ZIP )
 ===.
 
 Links:
