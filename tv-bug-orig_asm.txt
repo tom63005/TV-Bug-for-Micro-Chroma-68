@@ -1,0 +1,1845 @@
+*
+	NAM	TVBUG
+	TTL	1.2 A  VDG MONITOR FOR 6800,01,02,03,08 SYST
+*  REV 1
+*  1978 BY JOHN DUMAS
+*  
+*
+*  TVBUG (TM) MOTOROLA
+*
+*  AUSTIN, TEXTAS
+*  MICROCOMPUTER CAPITAL OF THE WORLD!
+*
+*  CURRENT REVISION DATE = NOV 20 !(&*
+*
+*  *************************************
+*  * FOR HOBBY USE ONLY.               *
+*  * TYPED BACK IN JAN-31-2016.        *
+*  * ASSEMBLED USING DOSBOX  & AS0.EXE *
+*  *************************************
+*
+*  ALTHOUGH THE INFORMATION CONTAINED HEREIN,
+*  AS WELL AS ANY INFORMATION PROVIDED RELATIVE
+*  THERETO, HAS BEEN CAREFULLY REVIEWED AND IS
+*  BELEIVED ACCURATE, MOTOROLA ASSUMES NO
+*  LIABILITY ARISING OUT OF ITS APPLICATION OR
+*  USE; NEITHER DOES IT CONVEY ANY LICENSE UNDER
+*  ITS PATENT RIGHTS NOR THE RIGHTS OF OTHERS.
+*
+*     ----FOLLOWING ARE TVBUG COMMANDS----
+*       EACH COMMAND IS 1 LETTER FOLLOWED
+*       BY AN OPTIONAL MODIFIER (ADDRESS OR
+*       DATA). MODIFIER IS ALWAYS HEX WITH
+*       LEADING ZERO(S) ASSUMED. MODIFIER
+*       FIELD IS TERMINATED WITH NON-
+*       HEX ENTRY(I.E.SPACE BAR). MODIFIER
+*       WILL BE EITHER 2 OR 4 HEX DEPENDING
+*       UPON COMMAND MODE.
+*
+*    L  LOAD K.C. STANDARD TAPE (D2 FORMAT)
+*    M  MEMORY CHANGE
+*    P  PUNCH K.C. STANDARD TAPE (D2 FORMAT)
+*    R  DISPLAY CONTENTS OF TARGET STACK
+*         CC   B   A   X   P   S
+*    B  PRINT OUT ALL BREAKPOINTS
+*    F  FILL MEMORY BLOCK
+*    C  CONTINUE EXECUTION FROM CURRENT LOCATION
+*    N  NEXT INSTRUCTION TRACE
+*    T  TRACE 'N' INSTRUCTIONS
+*    G  GOTO LOCATION 'N'
+*    D  DELETE ALL BREAKPOINTS
+*    U  UNSET BREAKPOINT WITH ADDRESS 'N'
+*    E  EXAMINE BLOCK OF MEMORY
+*    Q  QUICK LOAD OF HEX DATA
+*    O  OFFSET CALCULATION (BRANCH)
+*    S  SET A BREAKPOINT WITH ADDRESS 'N'
+*    V  VERIFY KC TAPE (D2 FORMAT)
+*    Z  CLEAR TV SCREEN
+*    !  USER FUNCTION #1  (SHIFT 1)
+*    *  USER FUNCTION #2  (SHIFT 2)
+*    #  USER FUNCTION #3  (SHIFT 3)
+* (PG EJECT)   (PDF PG-33)
+*
+*       OPT     S,CREF
+SWI    EQU     $3F   SWI OP-CCODE
+*
+VDGRAM EQU     $D000
+*
+* PIA FOR D2 HEX KEYBOARD & DISPLAY
+* (USED IF D2 KIT IS RETROFITTED)
+KEYAD  EQU     $F420
+KEYAC  EQU     KEYAD+1
+KEYBD  EQU     KEYAD+2
+KEYBC  EQU     KEYAD+3
+*
+* PIA FOR VDG & ASCII KEYBRD
+*
+PIAAD  EQU     $F404
+PIAAC  EQU     PIAAD+1
+PIABD  EQU     PIAAD+2
+PIABC  EQU     PIAAD+3
+*
+* ACIA FOR KC STANDARD TAPE INTERFACE
+*
+ACIAS  EQU     $F408
+ACIAD  EQU     ACIAS+1
+* (PG EJECT)  (PDF PG-34)
+*
+*
+       ORG     $F800
+BASORG EQU     *        BASE ORIGIN
+*
+* JUMP TABLE TO MONITOR
+*
+       JMP     INCH1    INPUT CHAR
+       JMP     OUTCH1   OUTPUT CHAR
+       JMP     PDATA1   OUTPUT STRING
+       JMP     BADDR    INPUT HEX
+       JMP     SCROLL   UP 1 LINE
+       JMP     OUT4HS   OUTPUT 4 HEX+SPACE
+       JMP     OUT2HS   OUTPUT 2 HEX+SPACE
+       JMP     INIT     CLEAR SCREEN
+       JMP     GETADR   GET ATART & STOP ADR
+       JMP     SAVE     SAVE AREG 0,X
+       JMP     SYNCLD   LOAD AREG 0,X
+       JMP     CONTRL   RESTART  POINT
+********
+*     I/O INTERRUPT SEQUENCE
+IO     LDX    IOV
+       JMP    0,X
+********
+*     NMI SEQUENCE
+*
+POWDWN LDX    NIO     GET NMI VECTOR
+       JMP    0,X
+********
+*     SWI INTERRUPT SEQUENCE
+*
+SPEI   LDX    SWI1
+       JMP    0,X
+*******
+* (PG EJECT)  (PDF PG-35)
+*
+*     JUMP TABLE TO ROUTINES PERFORMING TVBUG FCTN'S
+*
+FCTABL EQU     *
+*
+       FCC     /!/
+       FDB     USR1     GO USER #1
+       FCC     /"/
+       FDB     USR2     GO USER #2
+       FCC     /#/
+       FDB     USR3     GO USER #3
+       FCC     /B/      "B" - PRINT ALL BREAKS
+       FDB     PNTBRK
+       FCC     /C/      "C" - CONTINUE
+       FDB     CONT
+       FCC     /D/      "D" - DELETE ALL BREAKS
+       FDB     DELBRK
+       FCC     /G/      "G" - GO TO ENTERED ADDRESS
+       FDB     GOTO
+       FCC     /L/      "L" - LOAD
+       FDB     LOAD
+       FCC     /M/      "M" - MEMORY CHANGE
+       FDB     CHANGE
+       FCC     /N/      "N" - NEXT (TRACE 1 INSTR)
+       FDB     NEXT
+       FCC     /P/      "P" - PUNCH
+       FDB     PUNCH
+       FCC     /R/      "R" - PRINT STACK
+       FDB     PSTAK1
+       FCC     /T/      "T" - TRACE N INSTRUCTIONS
+       FDB     TRACE
+       FCC     /U/      "U" - RESET A BREAKPOINT
+       FDB     RSTBRK
+       FCC     /S/      "S" - SET A BREAKPOINT
+       FDB     SETBRK
+       FCC     /O/      OFFSET CALCULATION
+       FDB     OFFSET
+       FCC     /Q/      QUICK LOAD
+       FDB     FASTLD
+       FCC     /E/      EXAMINE BLOCK
+       FDB     DISPLY
+       FCC     /F/      FILL BLOCK
+       FDB     FILL
+       FCC     /V/      VERIFY K.C. STANDARD TAPE
+       FDB     VERIFY
+       FCC     /Z/      CLEARSCREEN
+       FDB     ZSCR
+FCTBEN EQU     *
+*
+**********
+*      INITIALIZATION/RESET CODE
+* THIS DATA IS COPIED
+* INTO RAM DURING START-UP INITIALIZATION
+*
+ADRSTR EQU     *
+       FDB     STACK    INIT FOR "SP"
+       FDB     SWI1S    INIT FOR "SWI1"
+       FDB     BRKINH   INIT FOR "SWI2"
+*
+       BRA     BRG      "BRA" INSTRUCTION REPLACED BY
+       JMP     BRNOGO   COND BRA INST ROUT.
+BRG    JMP     BRG0     WHICH DETERMINES IF
+*                       BRA IS GO/NOGO
+       RTS
+       RTS
+       RTS
+       RTS
+       RTS
+       RTS
+       JMP     CONTRL
+       JMP     CONTRL
+       JMP     CONTRL
+*
+**********
+* EXAMINE BLOCK OF MEMORY
+* ACSII EQUIV PRINTED BENEATH
+* HEX BYTE
+*    FROM START ADR TO STOP ADR
+* FORMAT :
+* AAAA DD1 DD2......DD8
+*      AC1 AC2......AC8
+*
+* AAAA=ADDRESS,DD=HEX DATA
+* AC=ASCII CHAR (IF PRINTABLE)
+**********
+DISPLY JSR     GETADR
+*
+NEWLIN JSR     PCRLF
+       LDX     #BEGA    PRINT ADDRESS
+       JSR     OUT4HS
+*
+       LDX     BEGA     SET FOR 8/LINE
+       LDAB    #8
+*
+OUTDAT CPX     ENDA     MAIN LOOP
+       BEQ     ASCII
+       JSR     OUT2HS   PRINT HEX BYTE
+       DECB
+       BNE     OUTDAT
+*
+* NOW DO ASCII
+*
+ASCII  JSR     PCRLF
+       BSR     OUT5S    SKIP ADDRESS
+       LDX     BEGA
+       LDAB    #8
+*
+NEWCHR LDAA    0,X
+       CMPA    #$1F
+       BLE     OUTPRD
+       CMPA    #$60
+       BLT     OUTASC
+OUTPRD LDAA    #'.
+OUTASC BSR     OUCH4
+       INX
+       CPX     ENDA
+       BEQ     C3
+*
+MORE   BSR     OUT2S
+       DECB
+       BNE     NEWCHR
+       STX     BEGA
+       JSR     INCH1
+       BRA     NEWLIN
+*
+*
+OUT5S  BSR     OUT1S
+       BSR     OUT1S
+       BSR     OUT1S
+OUT2S  BSR     OUT1S
+OUT1S  LDAA    #'       SPACE
+OUCH4  JMP     OUTCH1
+*
+*
+**********
+* FILL MEMORY BLOCK WITH KONSTANT
+**********
+*
+FILL   JSR    GETADR
+       LDX    #FILLMS
+       JSR    PDATA1
+       BSR    BADDR
+       LDAA   XLOW
+       LDX    BEGA
+*
+FILL0  CPX    ENDA
+       BEQ    C3
+       STAA   0,X
+       INX
+       BRA    FILL0
+*
+*
+* QUICK LOAD PRINTS ADDRESS ONCE
+* PER LINE THEN ACCEPTS  8 HEX BYTES
+* OF CODE & STORES IN MEMORY
+*
+FASTLD BSR    GETADR
+*
+FAST0  JSR    PCRLF
+       LDX    #BEGA     PRINT ADDR
+       JSR    OUT4HS
+*
+       LDAB   #8
+*
+FAST1  BSR    BADDR
+       LDX    BEGA
+       LDAA   XLOW      GET BYTE &
+       STAA   0,X       SAVE IT
+       INX
+       STX    BEGA
+       CPX    ENDA
+       BEQ    C3
+       DECB
+       BNE    FAST1
+       BRA    FAST0
+*
+*
+*
+ZSCR   JSR    INIT
+C3     JMP    CONTRL
+*
+**********
+* BUILD ADDRESS
+* A,B UNCHANGED
+* INPUT HEX CHARS UNTIL NON-HEX
+*    ENTERED THEN EXIT
+* COUNT # OF CHAR ENTERED
+*    SAVE COUNT IN CHRCNT
+* STORE TERMINATION CHAR
+*    IN TERMCH
+* ON EXIT  X = (XHI) = (TEMP2)
+**********
+BADDR  CLR    TEMP2
+       CLR    TEMP2+1
+       PSHB
+       PSHA
+       LDAA   #$FF      ZERO CHARACTER
+       STAA   CHRCNT    COUNTER
+BAD0   JSR    INCH1     1 CHAR IN
+       INC    CHRCNT    BUMP CHAR CNT
+       STAA   TERMCH    SAVE TERMINATION
+*
+* CHECK FOR VALID HEX
+*
+       SUBA   #$30
+       BMI    BAD2
+       CMPA   #9
+       BLE    BAD3
+       CMPA   #$11
+       BMI    BAD2
+       CMPA   #$16
+       BGT    BAD2
+       SUBA   #7
+*             GOOD HEX
+BAD3   ASLA
+       ASLA
+       ASLA
+       ASLA
+       LDAB   #4
+BAD1   ASLA
+       ROL    TEMP2+1
+       ROL    TEMP2
+       DECB
+       BNE    BAD1
+       BRA    BAD0
+*
+BAD2   LDX    TEMP#2
+       STX    XHI
+       PULA
+       PULB
+       RTS
+* (PG EJECT) PG=10.
+*
+**********
+* GET ADDRESS..SEND PROMPT
+* FOR BEGIN & END ADDRESSES
+* STORES IN BEGA & ENDA
+* ON EXIT A=$D,B=0,X=(ENDA)
+*
+**********
+GETADR LDX    #MCL4
+       BSR    PDATA1
+       BSR    BADDR
+       STX    BEGA
+*
+       LDX    #MCL5
+       BSR    PDATA1
+       BSR    BADDR
+       INX
+       STX    ENDA
+       RTS
+* (PG EJECT) PG=11
+*
+**********
+* OUTPUTS LEFT SIDE OF
+* BYTE AS ASCII HEX CHAR
+* ACCA IS KLOBBERED!
+**********
+OUTHL  LSRA            OUT HEX LEFT BCD DIGIT
+       LSRA
+       LSRA
+       LSRA
+**********
+* OUTPUTS RIGHT SIDE AS ASCII HEX
+* KLOBBERS ACCA
+**********
+*
+* (SPACER - PG12)
+*
+OUTHR  ANDA   #$F     OUT HEX RIGHT BCD DIGIT
+       ADDA   #$30
+       CMPA   #$39
+       BLS    OUTCH
+       ADDA   #$7
+       BRA    OUTCH
+*
+*
+*
+**********
+* PRINT DATA POINTED AT BY X-REG
+* ON EXIT A=4,B=UNCHANGED, X POINTS AT EOT
+**********
+PDATA2 BSR     OUTCH
+       INX
+PDATA1 LDAA    0,X
+       CMPA    #4
+       BNE     PDATA2
+       RTS              STOP ON EOT
+* (PG EJECT) PG=12  (PDF=46)
+**********
+* PRINT CR LF
+* ACCA IS KLOBBERED!
+**********
+PCRLF  STX     XHI
+       LDAA    #$D
+       BSR     OUTCH
+       LDX     XHI
+       RTS
+*
+**********
+* ON EXIT  X=X+1
+* BYTE IS PRINTED AS 2 HEX CHARACTERS
+*
+*
+OUT2H  LDAA    0,X     OUTPUT 2 HEX CHAR
+       BSR     OUTHL   OUT LEFT HEX CHAR
+       LDAA    0,X     PICK UP BYTE AGAIN
+       INX
+       BRA     OUTHR   OUTPUT RIGHT HEX CHAR AND RTS
+*
+*
+*
+*
+OUT4HS BSR     OUT2H   OUTPUT 4 HEX CHAR + SPACE
+OUT2HS BSR     OUT2H   OUTPUT 2 HEX CHAR + SPACE
+OUTS   LDAA    #$20    SPACE
+OUTCH  JMP     OUTCH1  (BSR & RTS)
+*
+* (PG EJECT) PG=13 (PDF=45)
+**********
+* VERIFY..SET VERIFY FLAG
+* THEN GO TO LOAD
+**********
+VERIFY LDAA    #1
+       STAA    VFLAG
+       BRA     LOAD0
+*
+*
+**********
+*LOAD MEMORY FROM KC STANDARD
+* TAPE..
+* BEFORE BLOCK OF DATA STARTS
+*  ALL BYTES (EXCEPT RUBOUT)
+*  ARE PRINTED AS ASCII CHARS
+* THIS WILL DISPLAY FILE TITLE
+*  IF ANY
+* AFTER BLOCK BEGINS EACH
+* BLOCKC READ WILL PRINT A 'B' ON TV
+**********
+LOAD   EQU     *
+       CLR     VFLAG
+*
+LOAD0  LDX     #OFSET
+       BSR     PDATA1
+       JSR     BADDR
+       STX     OFFADR
+*
+       LDAA    #$10      DIV BY 1
+       STAA    ACIAS
+BILD   TAB
+       BSR     KCIN
+       BMI     BILD
+       BSR     OUTCH
+*
+       CMPB    #$FF
+       BNE     BILD
+       CMPA    #'B      FIND BEGIN
+       BEQ     RDBLCK   * ROADBLOCK - READBLOCK
+       CMPA    #'G      FIND END
+       BNE     BILD
+       BRA     C5
+* (PG EJECT)  (PDF PG-46)
+*
+*
+RDBLCK BSR     KCIN
+       TAB              BYTE COUNT TO B
+       INCB
+       BSR     KCIN     START ADDR
+       STAA    BEGA
+       BSR     KCIN
+       STAA    BEGA+1
+       LDX     BEGA     TO X
+       BSR     ADDOFF
+*
+STBLCK BSR     KCIN
+       TST     VFLAG
+       BNE     LOAD1
+       STAA    0,X
+LOAD1  CMPA    0,X
+       BNE     LOAD19
+       INX
+       DECB             BYTE COUNT -1
+       BNE     STBLCK
+       BRA     BILD
+* (PG EJECT)  (PDF PG-48)
+*
+* 1 CHAR IN FROM TAPE
+*
+KCIN   BSR     CHKESC
+       LDAA    ACIAS
+       ASRA
+       BCC     KCIN
+       LDAA    ACIAD
+       RTS
+*
+* CHECK FOR ESCAPE KEY
+*
+*
+*
+CHKESC  PSHA
+        LDAA    PIAAD
+        ANDA    #$7F      MASK TO 7-BITS
+        CMPA    #$1B      ESC CHAR = 27 DEC
+        BNE     CHK1
+        JMP     ESC1
+CHK1    PULA
+        RTS
+*
+* (PG EJECT)  (PDF PG-49)
+*
+* CHANGE MEMORY (M AAAA DD NN)
+*
+CHANGE JSR     BADDR    BUILD ADDRESS
+CHG0   JSR     PCRLF    START NEW LINE
+       LDX     #XHI     & PRINT ADDR
+       JSR     OUT4HS
+*
+       LDX     XHI      PRINT OLD
+       JSR     OUT2HS   CONTENTS
+       DEX
+*
+       JSR     BADDR
+       LDX     SAVEX    GOT NEW
+*
+       TST     CHRCNT   NEW DATA ??
+       BEQ     SKPSTR   NO! SKIP LOAD
+       LDAA    XLOW     NO PUT IN
+       STAA    0,X      NEW DATA &
+       CMPA    0,X      CHECK
+       BNE     LOAD19   BAD..QUIT
+*
+SKPSTR LDAA    TERMCH   GOOD ST
+       INX              NEXT?
+       CMPA    #$0A     IF LF..YES
+       BEQ     CHG0     NEXT ADDR
+*
+       CMPA    #';      IF UP ARROW - DECREMENT ADDR
+       BNE     C5
+       DEX
+       DEX
+       BRA     CHG0     LAST ADDR
+LOAD19 LDX     #NCHG
+       BSR     PD2
+C5     JMP     CONTRL
+OUTCH5 JMP     OUTCH1
+* PG EJECT  (PDF PG-50)
+**********
+* ADD OFFSET TO VALUE IN X-REG
+* A & B UNCHANGED
+* OFFSET IS IN B,A
+**********
+ADDOFF PSHA
+       PSHB
+       STX     TEMP2
+*
+       LDAB    TEMP2
+       LDAA    TEMP2+1
+       ADDA    OFFADR+1
+       ADCB    OFFADR
+       STAB    TEMP2
+       STAA    TEMP2+1
+*
+       LDX     TEMP2
+       PULB
+       PULA
+       RTS
+* PG EJECT  (PDF PG=51)
+*
+*  NMI ENTRY
+*
+NMI     STS    SP
+        JSR    PCRLF
+        LDAA   #'B
+        BSR    OUTCH5
+        JSR    OUTS
+        LDAA   #2
+        JSR    BRKSUB
+        JMP    PSTAK1
+*
+*
+* OFFSET CALCULATES BRANCH
+*
+OFFSET  JSR    GETADR
+        LDX    #OFSET
+        BSR    PD2      SEND MESSAGE
+*
+        LDAA   ENDA+1   CALCULATE
+        LDAB   ENDA     OFFSET
+        SUBA   BEGA+1
+        SBCB   BEGA     SUBTRACT WITH CARRY (BEGA-B)->BEGA
+*
+        SUBA   #3       AND ADJUST  (A-3)->A
+        SBCB   #0       (A-B-0)->A
+        STAA   TEMP+1
+        STAB   TEMP
+        LDX    #TEMP    PRINT ADDR
+        PSHA
+        JSR    OUT4HS
+*
+* CHECK PROPER ARANGE
+*
+        PULA
+        ROLA
+        ROLB
+        CMPB    #0
+        BEQ     C5
+        CMPB    #$FF
+        BEQ     C5
+        LDX     #BADJP    TELL EM
+        BSR     PD2       IT'S BAD
+        BRA     C5
+*
+PD2     JMP     PDATA1
+* PG EJECT  (PDF PG-52)
+*
+*
+* CONSTANT INITIALIZATION
+* S = POINTER TO ROM BYTES TO BE COPIED TO RAM
+* X = POINTER TO RAM BYTES TO BE INITIALIZED
+*
+START   EQU     *          ACTUAL CODE START
+        LDS     #ADRSTR-1  START OF CONSTANT DATA
+        LDX     #SP        START OF RAM AREA
+*
+INILP1  PULA               GET NEXT CONSTANT BYTE
+        STAA    0,X        INIT NEXT RAM BYTE
+        INX                UPDATE POINTER
+        CPX     #BRANEN    END OF CONSTANT RAM AREA?
+        BNE     INILP1    NO, CONTINUE INITIALIZATION
+*
+* INITIALIZATION TO 0
+* X HOLDS INDEX OF 1ST BYTE TO BE SET TO 0
+*
+INILP2  CLR     0,X     CLEAR NEXT BYTE OF RAM
+        INX             UPDATE INDEX
+        CPX     #ENDIN0 ANY MORE BYTES TO INIT?
+        BNE     INILP2  NO, CONTINUE CLEARING
+*
+* SET CC SO WHEN WE 'GO' TO USER PGM THE
+*   INTERRUPT MASK IS SET
+*
+        LDAA    #$D0
+        STAA    STACK+1  PUT IN STACK TO BE PULLED
+* PG EJECT (PDF PG-53)
+*
+* INITIALIZXE KC TAPE ACIA
+* & KEYBOARD PIA
+*
+ESC1   LDS    SP
+       LDAA   #$3C
+       STAA   KEYAC    KILL HEX HEYBRD & TRACE
+       STAA   KEYBC    FOR D2 KIT
+*
+       LDAA   #3
+       STAA   ACIAS    KILL KC TAPE
+*
+* CONFIGURE PIA FOR VDG & ASCII KBD
+*
+       CLR    PIABD
+       CLR    PIAAD
+       LDAA   #4
+       STAA   PIAAC
+       STAA   PIABC
+*
+       JSR    INIT     CLEAR SCREEN
+       LDX    #MCL2    PRINT HEADER
+       JSR    PDATA1   PRINT DATA STRING
+       LDX    #NMI     INIT PDN
+       STX    NIO
+*
+* PG EJECT  (PDF PG-54)
+*
+* MAIN COMMAND/CONTROL LOOP
+*
+CONTRL  EQU   *
+*
+* RESTORE STACK POINTER REGISTER
+*
+        LDS   SP       SP WAS INITIALIZED EARLIER
+        LDX   #READY
+        BSR   PD2
+*
+*
+*
+        JSR   INCH1    READ COMMAND CHARACTER
+        TAB            SAVE CHARACTER IN B
+        JSR   OUTS     PRINT SPACE AFTER COMMAND
+*
+* B REGISTER HOLDS CHARACTER INPUT BY USER.
+* USE JUMP TABLE TO GO TO APPROPRIATE ROUTINE.
+*
+        LDX    #FCTABL  X:= ADDRESS OF JUMP TABLE
+NXTCHR  CMPB   0,X      DOES INPUT CHAR MATCH?
+        BEQ    GOODCH   YES, GOTO APPROPRIATE ROUTINE
+        INX             ELSE, UPDATE INDEX INTO TABLE
+        INX
+        INX
+        CPX    #FCTBEN  END OF TABLE REACHED?
+        BNE    NXTCHR   NO, TRY NEXT CHAR
+        BRA    CONTRL   NO MATCH, REPROMPT USER
+*
+*
+GOODCH  LDX    1,X      GET ADDRESS FROM J.T.
+        JMP    0,X      GOTO APPROPRIATE ROUTINE
+*
+*
+* (BLANK LINE)
+*
+*
+BADDRJ  JMP    BADDR    GO TO BUILD ADDRESS
+* PG EJECT  (PDF PG-56)
+*
+*
+* RESET ALL BREAKPOINTS
+*
+DELBRK LDAA    #1      RESET BREAKS FLAG
+BSRBRK BSR     BRKSUB  BREAK HANDLING SUB.
+       BRA     CNTRL2  RETURN TO COMMAND LEVEL
+*
+* RESET 1 BREAKPOINT
+*
+RSTBRK BSR     BADDRJ   PUTS USER ENTERED ADDRESS
+*                             INTO XHI,XLOW
+       CLRA             RESET 1 BREAK FLAG
+       BRA     BSRBRK   GO RESET 1
+*
+* PRINT OUT ALL NON-ZERO BREAK ADDRESSES
+*
+PNTBRK JSR    PCRLF    DO CR/LF
+       LDAA   #2       PRINT BREAK ADDRESS FLAGS
+       BRA    BSRBRK   GO PRINT
+*
+* SET ONE BREAK
+*
+SETBRK BSR    BADDRJ    GET USER ENTERED ADDRESS (XHI,XLOW)
+       LDAA   #4        SET ONE BREAK FLAG
+       BSR    BRKSUB    GO SET IT
+       BRA    PNTBRK
+* PG EJECT  (PDF PG-57)
+*
+* GO TO REQUESTED
+*
+GOTO   BSR    BADDRJ    GO GET ADDRESS FROM USER
+*                       XHI.XLOW HOLD ADDRESS
+       LDAA   #$FF      FLAG FOR PUTTING IN BREAKS
+       BSR    BRKSUB    GO PUT IN BREAKS
+       TSX
+       LDAA   XHI       SAVE PCH ON STACK
+       STAA   5,X
+       LDAA   XLOW      PSH PCL
+       STAA   6,X
+       RTI              GO TO USER PRG
+*
+* SINGLE INSTRUCTION TRACE REQUESTED
+*
+NEXT   LDX    #1        # INSTRUCTIONS TO TRACE
+TRACE2 CLR    BRKTRC    CLEAR FLAG INDICATING TRACE
+*                       IS DUE TO BREAK
+TRACE3 STX    NTRACE    SAVE # INST'S TO TRACE
+       LDX    SP        X : = STACK POINTER
+       LDX    6,X       X : = INSTR TO BE EXECUTED
+       STX    TRCADR    SAVE IN TRACE ADDRESS STORE
+       LDAA   0,X       GET INSTRUCTION TO BE TRACED
+       STAA   TRCINS    SAVE IN INSTRUCTION STORE
+       JMP    CONTRC    CONTINUE TRACE PART OF PROGRAM
+*
+* MULTIPLE INSTRUCTION TRACE
+*
+TRACE  BSR    BADDRJ    GET # OF INSTRUCTIONS TO TRACE
+       BRA    TRACE2    GO TRACE'M
+*
+* CONTINUE EXECUTION
+*
+CONT   INC    BRKTRC    TRACE 1 TO RESTORE SWI'S
+       LDX    #1        ONE TRACE ONLY
+       BRA    TRACE3
+*
+*
+*   R COMMAND
+*
+* PRINT STACK CONTENTS
+*
+PSTAK1 JSR    PCRLF     PRINT CR LF
+       LDX    #MCL3     PRINT HEADER
+       JSR    PDATA1
+       JSR    PRINT     PRINT STACK
+CNTRL2 JMP    CONTRL    RETURN TO COMMAND LEVEL
+* (PG EJECT)  (PDF PG-57)
+**********
+*
+* BRKSUB
+*
+*
+* THIS ROUTINE DOES A NUMBER OF OPERATIONS HAVING
+* TO DO WITH BREAKPOINTS.
+*
+* THE A REGISTER DETERMINES FUNCTION PERFORMED:
+*
+* A = -1 =" BREAKS ARE PUT INTO THE USER'S CODE
+* A =  0 =" THE BREAKPOINT WHOSE ADDRESS IS IN
+*         XHI, XLOW IS PURGED;
+*         ALL BREAKPOINTS ARE TEMPORARILY REMOVED
+* A =  1 ="ALL BREAKPOINTS ARE PURGED
+* A =  2 ="ALL BREAKPOINTS ARE PRINTED OUT
+*         ALL BREAKPOINTS ARE TEMPORARILY REMOVED
+* A =  3 ="ALL BREAKPOINTS ARE TEMPORARILY REMOVED
+* A =  4 ="THE BREAK ADDRESS IN XHI, XLOW IS
+*         PUT INTO THE FIRST ZERO BREAKPOINT
+*         POSITION; ALL BREAKPOINTS ARE TEMPORARILY REMOVED
+*
+**********
+*
+BRKSUB EQU    *
+       STS    SSAVE    SAVE S SO WE CAN USE
+       STAA   ASAVE    A HOLDS THE FUNCTION #
+*
+       LDX    #BRKADR  INIT X FOR LOOP THROUGH BREAK
+*
+* START OF LOOP THROUGH BREAD ADDRESSES
+*
+BRKLP  LDAA   ASAVE    GET FUNCTION #
+       LDS    0,X      S:=NEXT ADDRESS IN BRKPT LIST
+       BEQ    LN       IF 0, THEN NOT A VALID BREAKPOINT
+*
+       TST    BRKSIN   ARE BREAKS IN USER'S CODE?
+       BEQ    NOBRIN   BRANCH, IF NOT
+*
+*      BREAKS ARE IN USER'S CODE
+*
+       TSTA            SHOULD BREAKS BE IN?
+       BMI    BKDONE   YES, RETURN TO CALLER
+*
+* BREAKS ARE TO BE TAKEN OUT OF USER'S
+* CODE TEMPORARILY
+*
+       LDAA   2*NBRBPT,X GET INSTR, BELONG-
+*                            ING IN USER CODE
+       PSHA            PUT IT THERE
+* (PG EJECT)  (PDF PG-58)
+*
+* OTHER ACTIONS TO BE PERFORMED EACH TIME THROUGH
+* LOOP WHEN BREAK ADDRESS NOT EQUAL TO 0.
+*
+BKCON1 LDAA    ASAVE    # OF B
+       BEQ     FNDRPL   SEE IF BREAKPOINT NEEDS TO
+*                             BE REPLACED
+       CMPA    #1       IS BRK ADDRESS TO BE RESET?
+       BEQ     CLRBRK   YES, SET BRKADR TO 0
+*
+       CMPA    #2       IS BRK ADDR TO BE PRINTED?
+       BEQ     PRNTBK   YES, GO PRINT ADDRESS
+*
+* UPDATE LOOP INDEX AND LOOP IF APPROPRIATE
+*
+BKCON2 INX              MAKE X POINT TO
+       INX              NEXT BREAK ADDRESS
+BKCON3 CPX    #BRKINS   ANY MORE BREAKS?
+       BNE    BRKLP     YES,LOOP
+*
+* WRAP-UP PROCESSING AND EXIT
+*
+       CLRA             A = BREAKS IN FLAG
+       TST    ASAVE     IS FUNCTION = -1?
+       BPL    BKPUT     NO, SO BRKSIN = 0
+       INCA             FCTN = -1 =" BRKSIN:=1
+BKPUT  STAA   BRKSIN    STORE APPROPRIATE FLAG
+*
+* RESTORE S-REG AND RETURN TO CALLER
+*
+BKDONE LDS    SSAVE     RESTORE USER S-REG
+       RTS
+* (PG EJECT)  (PDF PG-59)
+*
+* MISCELLANEOUS ROUTINES FOR BRKSUB
+*
+* BREAKPOINT ADDRESS = 0 - IF FUNCTION = 4 THEN
+* PUT BREAKPOINT ADDRESS IN CURRENT POSITION
+* A HOLDS THE FUNCTION #, X HOLDS BREAKPOINT INDEX
+*
+LN     CMPA    #4        IS FUNCTION = 4?
+       BNE     BKCON2    IF NOT, THEN CONTINUE LOOP
+*
+       LDS     XHI       GET NEW BREAK ADDRESS
+       STS     0,X       PUT IN CURRENT POSITION
+*
+       DEC     ASAVE     DO NOT PLACE ADDRESS MORE
+*                              THAN ONCE- CONT TO
+*                              TAKE OUT BREAKPOINTS
+       BRA     BKCON2    CONTINUE LOOP
+* (PG EJECT)  (PDF PG-60)
+*
+* BREAKS ARE NOT IN AND ADDRESS IS NON-ZERO.
+* IF FUNCTION = -1 THEN SWI'S ARE TO BE PUT IN.
+* A HOLDS FUNCTION NUMBER, S HOLDS ADDRESS
+*
+NOBRIN TSTA
+       BPL    BKCON1    NO,CONTINUE
+*
+       DES              MAKE ADDRESS POINT TO 1 LESS
+       PULA             GET USER INSTRUCTION
+       STAA   2*NBRBPT,X SAVE
+       LDAA   #SWI      GET SWI OP-CODE
+       PSHA             REPLACE USER INSTRUCTION
+       BRA    BKCON2    CONTINUE LOOP
+*
+* FUNCTION=0, BRK ADDR NOT = 0, USER'S INSTR
+* IS IN (NOT SWI).
+* IF ADDRESS = XHI,XLO THEN SET ADDRESS = 0
+*
+FNDRPL  LDAA    0,X      GET TOP BYTE OF ADDRESS
+        CMPA    XHI      DO TOP BYTES COMPARE
+        BNE     BKCON2   NO, CONTINUE LOOP
+        LDAB    1,X      GET LOW BYTE OF ADDR
+        CMPB    XLOW     SAME FOR LOW BYTES
+        BNE     BKCON2
+*
+CLRBRK  CLR     0,X      CLEAR OUT BREAK
+        CLR     1,X      ADDRESS FIELD
+        BRA     BKCON2   CONTINUE LOOP
+*
+*
+OT2HS   JMP     OUT2HS
+OT4HS   JMP     OUT4HS
+*
+* PRINT OUT BREAK ADDRESS
+* FUNCTION = 2, BREAK ADDRESS IS NOT = 0, X = ADDRESS INDEX
+*
+PRNTBK LDS    SSAVE
+       BSR    OT4HS    OUTPUT ADDRESS AND SPACE
+       BRA    BKCON3   SO BYPAS 2 INX'S
+*
+* (PG EJECT)  (PDF PG-61)
+*
+* PRINT CONTENTS OF STACK
+*
+PRINT  JSR    PCRLF    PRINT CR LF
+       LDX    SP       PRINT OUT STACK
+       INX
+       BSR    OT2HS    CONDITION CODES
+       BSR    OT2HS    ACC-B
+       BSR    OT2HS    ACC-A
+       BSR    OT4HS    X-REG
+       BSR    OT4HS    P-COUNTER
+       LDX    #SP
+       BSR    OT4HS    STACK POINTER
+       RTS
+* (PG EJECT)  (PDF PG-62)
+**********
+*    PUNCH DUMP
+*    PUNCH FROM BEGINNING ADDRESS (BEGA) THRU ENDING
+*    ADDRESS (ENDA)
+**********
+* FIRST GET START & END ADDRESS
+*
+PUNCH  JSR    GETADR
+       DEX
+       STX    ENDA
+*
+       LDX    #HEADMS   GET TITLE
+       JSR    PDATA1
+       LDX    #HEADBF
+PUN00  JSR    INCH1
+       STAA   0,X
+       INX
+       CMPA   #$D
+       BNE    PUN00
+       LDAA   #4
+       STAA   0,X
+* (PG EJECT)   (PDF PG-63)
+*
+* NOW START PUNCH
+*
+       LDAA    #$51      8 BIT, 2 STOP DIV 16
+       STAA    ACIAS     RTS NOT HI
+       LDX     #$03FF
+       BSR     PNLDR
+       LDAA    #$80
+       BSR     KCOUT
+       LDX     #HEADBF
+PUND05 BSR     PUN
+       CMPA    #$D
+       BNE     PUND05
+       LDAA    #$FF
+       BSR     KCOUT
+PUND10 LDAB    ENDA+1
+       SUBB    BEGA+1
+       LDAA    ENDA
+       SBCA    BEGA
+       BEQ     PUND25
+       LDAB    #$FF
+PUND25 LDAA    #'B       PUNCH A B
+       BSR     KCOUT
+       PSHB
+       TSX
+       BSR     PUN
+       PULA              BYTE COUNT
+       INCA
+       STAA    CHRCNT
+       LDX     #BEGA     PUNCH ADDRESS
+       BSR     PUN
+       BSR     PUN
+       LDX     BEGA
+* (PG EJECT)   (PDF = PG-64)
+PUND30 BSR    PUN
+       DEC    CHRCNT
+       BNE    PUND30
+       STX    BEGA
+       LDX    #$96
+       BSR    PNLDR     150 1'S
+       LDX    BEGA
+       DEX
+       CPX    ENDA
+       BNE    PUND10
+       LDAA   #'G
+       BSR    KCOUT     PUNCH END CHAR
+       LDX    #$19
+       BSR    PNLDR
+       JMP    CONTRL
+*
+*SUBROUTINE TO PUNCH A BYTE
+* BYTE IS DISPLAYED ON TV AS 2 HEX
+* NO REGISTER CHANGED
+KCOUT  PSHB
+KC1    JSR    CHKESC
+       LDAB   ACIAS     READY?
+       ASRB
+       ASRB
+       BCC    KC1
+       STAA   ACIAD
+       PULB
+       PSHA
+       JSR    OUTHL   SEND BYTE( IN HEX )
+       PULA           TO VDG DISPLAY
+       PSHA
+       JSR    OUTHR
+       PULA
+       RTS
+*
+*SUB TO PUNCH 1 BYTE POINTED BY X REG
+* X=X+1
+* BYTE FETCH FROM MEMORY IS IN SYNC
+* WITH TV RETRACE
+PUN    JSR    SYNCLD
+       BSR    KCOUT
+       INX
+       RTS
+*
+* PUNCH LEADER
+*
+PNLDR  LDAA    #$FF
+       BSR     KCOUT
+       DEX
+       BNE     PNLDR
+       RTS
+*
+* (PG EJECT)   (PDF PG-65)
+*
+*
+* SWI-1 SOFTWARE INTERRUPT LEVEL 1 PROCESSING
+*
+SWI1S  EQU    *
+       STS    SP      SAVE USER'S SP
+*
+       LDAA   #3
+       JSR    BRKSUB  GO TAKE OUT ALL BREAKPOINTS
+*
+* DECREMENT P-COUNTER
+*
+       TSX            X:=STACK POINTER - 1
+       TST    6,X     IF LOWER BYTE = 0 =" BORROW
+       BNE    SWI1S1  BRANCH IF BORROW NOT REQ'D
+       DEC    5,X     DECREMENT UPPER BYTE
+SWI1S1 DEC    6,X     DECREMENT LOWER BYTE
+*
+* TEST FOR ADDRESS TRACE OR BREAK
+*
+       LDX    5,X     X:=P COUNTER
+       CPX    TRCADR  IS SWI FOR TRACE?
+       BEQ    TRCINH  YES, GO TO TRACE INT HANDLER
+*
+       LDAA   0,X     GET INSTRUCTION CAUSING SWI
+       CMPA   #SWI    WAS IT REPLACED BY CALL BREAKOUT
+       BNE    BRKINH  YES, SO MUST BE A BREAK
+*
+* USER SWI-TRANSFER THROUGH LEVEL 2 SWI
+*
+       TSX            X:=STACK POINTER
+       INC    6,X     UPDATE LOW BYTE OF P-COUNTER
+       BNE    INCNOV  BRANCH IF NO CARRY
+       INC    5,X     UPDATE HIGH BYTE IF NECESSARY
+*
+INCNOV LDX    SWI2    X:=POINTER TO LEVEL 2 SWI HANDLER
+       JMP    0,X     GO TO LEVEL 2 HANDLER
+*
+*
+*
+*
+* BREAK INTERRUPT HANDLER
+*
+BRKINH EQU    *
+       JSR    PRINT   STOP AND SHOW REGS TO USER
+CTRL   JMP    CONTRL  RETURN TO CONTROL LOOP
+* (PG EJECT)  (PDF PG-66)
+*
+* TRACE INTERRUPT HANDLER
+* P-COUNTER HAS BEEN DECREMENTED TO POINT AT SWI
+* TRCINS HOLDS OP CODE REPLACED BY SWI
+* X HOLDS ADDRESS OF WHERE TRACE SWI IS
+*
+TRCINH LDAA    TRCINS    GET OP CODE OF TRACED INSTR
+       STAA    0,X       RESTORE TO USER'S CODE
+*
+       TST     BRKTRC    IS PROCESSING TO BE
+*                             IMMEDIATELY CONTINUED?
+       BEQ     NBKTRC    BRANCH IF NOT
+*
+* PROCESSING IS TO *CONTINUE*
+*
+       CLR     BRKTRC    RESET CONTINUE FLAG
+       LDAA    #$FF      FLAG TO SET BREAKS IN CODE
+       JSR     BRKSUB    PUT BREAKS IN
+       CLR     TRCADR    NO MORE TRACE, SO CLEAR ADDRESS
+       CLR     TRCADR+1  .
+       RTI               CONTINUE
+*
+* TRACE IS DUE TO N OR T TRACE COMMANDS
+*
+NBKTRC JSR    PRINT    PRINT STACK
+       LDX    NTRACE   GET # INSTRUCTIONS TO TRACE
+       DEX             DECREMENT COUNT
+       STX    NTRACE   AND RESTORE
+       BEQ    CTRL     BRANCH IF ALL TRACES DONE
+*
+* TRACE NOT DONE - TRACE NEXT INSTRUCTION
+*
+CONTRC LDAA   TRCINS   GET CURRENT INSTRUCTION
+       STAA   BRINS    SAVE IN CASE IT'S A BRANCH
+       BSR    OPCBYT   GO GET # BYTES/TYPE
+       TSTA            CHECK FOR BRANCH
+       BPL    CKOBRA   CHECK FOR OTHER THAN BRANCH
+* (PG EJECT)  (PDF PG-67)
+*
+* RELATIVE BRANCH TYPE INSTRUCTION
+* DETERMINE WHERE TO PUT SWI
+* S- HOLDS POINTER TO USER STACK AFTER SWI
+*
+       PULA            GET CONDITION CODE
+       DES             UPDATE STACK POINTER AFTER PULL
+       ORAA   #%00010000  MAKE INT'S INHIBITED
+       TAP             RESTORE USER'S C. CODE REG
+       JMP    BRINS    GO SEE HOW RELATIVE BRANCH
+*                            FARES
+*
+* BRANCH WAS NOGO - PUT SWI AT NEXT INSTRUCTION
+*
+BRNOGO LDAA   #2       A = # BYTES AFTER INSTR
+       BRA    CKOBRA   GO PUT SWI APPROPRIATELY
+*
+* BRANCH WAS GO, PUT SWI AT ADDRESS BEING
+* JUMPED TO
+*
+BRG0   LDX     TRCADR    X :  = TRACE ADDRESS
+       LDAA    1,X       GET BRANCH OFFSET
+       INX               OFFSET IS RELATIVE TO
+       INX               INSTR FOLLOWING BRANCH
+       BMI     BRGODC    BRANCH IF NEGATIVE OFFSET
+BRG1   BSR     INCX      INCREMENT X BY AMOUNT IN
+*                            A REG
+BRG2   STX     TRCADR    SAVE ADDRESS OF NEXT
+*                            INSTR TO STOP ON
+       LDAA    0,X       GET INSTRUCTION TO BE REPLACED
+       STAA    TRCINS    SAVE
+       LDAA    #SWI      GET SWI OP-CODE
+       STAA    0,X       REPLACE INSTR WITH SWI
+       LDS     SP        GET ORIGINAL STACK POINTER
+       RTI               TRACE ANOTHER INSTR
+*
+* X NEEDS TO BE DECREMENTED (OFFSET NEGATIVE)
+*
+BRGODC DEX               DECREMENT ADDRESS
+       INCA              INCREMENT COUNTER
+       BNE    BRGODC     IF COUNTER NOT 0, BRANCH
+       BRA    BRG2       IF DONE, GO RETURN TO USER PROG
+*
+* SUBROUTINE TO INCREMENT X BY CONTENT OF A
+*
+INCX   TSTA              IS A = 0 ?
+       BEQ    INCXR      IF SO, INC DONE
+INXLP  INX               ELSE, INCREMENT X
+       DECA              DECREMENT COUNT
+       BNE    INXLP      IF COUNT NOT YET 0, LOOP
+INCXR  RTS               RETURN FROM THIS SUBROUTINE
+* (PG EJECT)   (PDF PG-68)
+*
+* INSTRUCTION TO BE TRACED IS NOT BRANCH.
+*
+CKOBRA LDX    TRCADR    X : = TRACE ADDRESS
+       LDAB   0,X       GET INSTR TO BE TRACED
+       CMPB   #$6E      IS IT A JUMP, INDEXED?
+       BEQ    JMPIDX    YES, GO SIMULATE JUMP IDXED
+       CMPB   #$7E      JUMP, EXTENDED ?
+       BEQ    JMPEXT
+       CMPB   #$AD      JSR, INDEXED?
+       BEQ    JMPIDX    (JUMP IDXED IS SAME AS
+*                             TRANSFER OF CONTROL)
+       CMPB   #$BD      JSR, EXTENDED?
+       BEQ    JMPEXT
+       CMPB   #$3B      RTI?
+       BEQ    RTISIM
+       CMPB   #$39      RTS?
+       BEQ    RTSSIM
+       CMPB   #$8D      BSR?
+       BEQ    BRG0      (BRANCH PROCESSING)
+*
+* NOT A BRANCH, JUMP, RTI, RTS
+* A REGISTER HOLDS # BYTES IN INSTRUCTION
+*
+       BRA    BRG1      PUT IN NEW SWI AND
+*                          TRACE NEXT INSTRUCTION
+*
+* JUMP, JSR INDEXED SIMULATION
+*
+JMPIDX LDAA    1,X      A : = ADDRESS OFFSET
+       TSX
+       LDX     3,X      GET TARGET'S X REG
+       BRA     BRG1     UPDATE X, TRACE NEXT INSTR
+*
+* JUMP, JSR EXTENDED
+*
+JMPEXT LDX     1,X      GET ADDRESS TO BE JUMPED TO
+       BRA     BRG2     GO TRACE NEXT INSTR
+*
+* RTI ENCOUNTERED
+*
+RTISIM TSX
+       LDX     12,X     GET P-COUNTER FROM STACK
+       BRA     BRG2     GO TRACE NEXT INSTR
+*
+* RTS ENCOUNTERED
+*
+RTSSIM TSX
+       LDX     7,X      GET RETURN P-REG FROM STACK
+       BRA     BRG2     GO TRACE NEXT INSTR
+* (PG EJECT)   (PDF PG-69)
+********************
+*
+* OPBCYT
+*
+* THIS ROUTINE DETERMINES THE # OF BYTES
+*  IN AN INSTRUCTION
+* GIVEN ITS OP-CODE.
+*
+* INPUT: A HOLDS THE OP-CODE
+*
+* OUTPUT: X HOLDS INDEX OF TABLE ELEMENT
+* B NO RESTORED
+* A HOLDS # BYTES IN INSTRUCTION
+* EXCEPT FOR BRANCHES IN WHICH CASE A IS NEGATIVE
+*
+*******************
+*
+OPCBYT EQU    *
+       TAB            B:= OP-CODE
+       LSRA
+       LSRA
+       LSRA           PUT 4 UPPER BITS IF OP-CODE INTO
+       LSRA           LOWER 4 BITS OF A
+*
+       LDX    #OPBTTB X= ADDRESS OF TABLE
+       BSR    INCX    INC X TO POINT TO ENTRY
+*
+       LDAA   0,X     GET TABLE ENTRY
+       BNE    OPBTRT  IF NOT 0 THEN NO FURTHER
+*                           PROCESSING NEEDED
+*
+* IF TOP 4 BITS = 8 OR C, THEN THERE ARE TWO CLASSES
+* OF INSTRUCTIONS: 2 BYTE INSTRUCTIONS AND
+* CE, 8C AND 8E WHICH ARE 3 BYTE INSTRUCTIONS
+*
+       LDAA   #2       # BYTES IN MOST OF 8# INSTRUCTIONS
+       CMPB   #$8C     3 BYTE INSTRUCTION ?
+       BEQ    OPBT3    YES, UPDATE A
+       CMPB   #$CE     3 BYTE INSTR ?
+       BEQ    OPBT3    YES, UPDATE A
+       CMPB   #$8E     3 BYTE INSTRUCTION?
+       BNE    OPBTRT   NO, RETURN
+*
+OPBT3  INCA            # BYTES IN INSTRUCTION:=3
+*
+OPBTRT RTS             RETURN TO CALLER
+* (PG EJECT)   (PDF PG-70)
+*
+* OP CODE TO NUMBER OF BYTES CONVERSION TABLE
+*
+*           # BYTES  TOP 4 BITS OF OPCODE
+*           -------  --------------------
+*
+OPBTTB EQU    *
+       FCB    1        0
+       FCB    1        1
+       FCB    2+%10000000 2 (MINUS=" BRANCHES)
+       FCB    1        3
+       FCB    1        4
+       FCB    1        5
+       FCB    2        6
+       FCB    3        7
+       FCB    0        8 # BYTES=2 EXCEPT 8C,8E
+       FCB    2        9
+       FCB    2        A
+       FCB    3        B
+       FCB    0        C #BYTES=2 EXCEPT CE
+       FCB    2        D
+       FCB    2        E
+       FCB    3        F
+* (PG EJECT)   (PDF PG-71)
+*
+* CONSTANT DATA
+*
+MCL2   FCC    /VDG DEBUG SYSTEM/
+       FCC    /;TV-BUG VER 1.2/
+       FCB    $D
+       FCC    /MOTOROLA-AUSTIN TEX/
+       FCB    4
+MCL3   FCC    /CC B  A   X    P    S/
+       FCB    4
+MCL4   FCB    $D
+       FCC    /BEG ADR? /
+       FCB    4
+MCL5   FCC    /END ADR? /
+       FCB    4
+NCHG   FCC    / MEMORY BAD!/
+       FCB    4
+READY  FCB    $D
+       FCC    /TVBUG/
+       FCB    $D,4
+OFSET  FCB    $D
+       FCC    /OFFSET=/
+       FCB    4
+BADJP  FCC    /TOO FAR!/
+       FCB    4
+FILLMS FCB    $D
+       FCC    /CHAR?/
+       FCB    4
+*
+* (PG EJECT)  (PDF  PG-72/
+**********
+* A,B UNCHANGED, X=(NEXTBY)
+* SAVE CHARACTER AT LOCATION
+*   (NEXTBY)
+* FLASH THE LOCATION (4 COLORS)
+* REPLACE THE CHAR & RETURN
+**********
+BLINK  PSHB
+       LDX    NEXTBY
+       BSR    SYNCLD
+       PSHA
+       LDAA   #$CF     BLINK CURSOR
+       LDAB   #4
+INC1   JSR    SAVE
+       ADDA   #$10
+       JSR    WAITFS
+       DECB
+       BNE    INC1
+*
+* REPLACE CHARACTER
+*
+       PULA
+       JSR    SAVE
+       PULB
+       RTS
+* (PG EJECT)   (PDF PG-73)
+**********
+* B,X UNCHANGED
+* MASK INTERRUPT BEFORE LOAD
+*   & UNMASK AFTER
+* WAIT FOR LEADING EDGE
+*   OF HORIZONTAL SYNC THEN
+*   LOAD A FROM LOCATION 0,X
+**********
+SYNCLD SEI
+SLD1   LDAA   PIABD
+       BPL    SLD1
+SLD2   LDAA   PIABD
+       BMI    SLD2
+*
+* NOW CAN LOAD
+*
+       LDAA   0,X
+       CLI
+       RTS
+* (PG EJECT)  (PDF PG-74)  (PRINT PG-42)
+**********
+* A,B UNCHANGED
+* IF HOME KEY CLOSED
+*    THEN ADR OF DISPLAY TO (NEXTBY)
+* IF UP CLOSED
+*    THEN 2'S COMP OF 32 TO A,B &
+*         CALL UPDOWN
+* IF DOWN KEY CLOSED
+*    THEN 32 TO A,B & CALL UPDOWN
+* IF RIGHT KEY CLOSED
+*    THEN INCREMENT (NEXTBY TO MARGIN
+* IF LEFT KEY CLOSED
+*    THEN DECREMENT (NEXTBY) TO MARGIN
+**********
+CURSOR PSHB
+       PSHA
+       LDAB   PIABD
+*CHECK UP ARROW
+       RORB
+       BCC    CUR1
+       PSHB
+       LDAA   #$E0
+       LDAB   #$FF     -32
+       JSR    UPDOWN
+       PULB
+*CHECK DOWN ARROW
+CUR1   RORB
+       BCC    CUR2
+       PSHB
+       LDAA   #$20
+       CLRB            +32
+       JSR    UPDOWN
+       PULB
+*CHECK LEFT ARROW
+CUR2   RORB
+       BCC    CUR3
+       LDAA   NEXTBY+1
+       ANDA   #$1F
+       BEQ    CUR3
+       LDX    NEXTBY
+       DEX
+       STX    NEXTBY
+*CHECK RIGHT ARROW
+CUR3   RORB
+       BCC    CUR4
+       LDAA   NEXTBY+1
+       ORAA   #$E0
+       CMPA   #$FF
+       BEQ    CUR4
+       LDX    NEXTBY
+       INX
+       STX    NEXTBY
+*CHECK HOME KEY
+CUR4   RORB
+       BCC    CUR5
+       LDX    #VDGRAM
+CUR5   PULA
+       PULB
+       STX    NEXTBY
+       RTS
+* (PG EJECT)  (PDF PG-76)
+*
+* NOW CHECK KEYBOARD
+* ON EXIT INPUT CHAR IN A-REG
+* X,B UNCHANGED
+INCH1  STX    SAVEX
+       PSHB
+INCH0  BSR    BLINK    FLASH CURSOR
+       BSR    CURSOR
+       LDX    SAVEX
+*
+*
+       LDAA   PIAAD    LOOK FOR ANY KEY
+       BMI    NONE
+       CMPA   FLAGK    SAME KEY
+       BEQ    SAME     FROM LAST TIME?
+*
+* CHECK FOR ESCAPE FUNCTION
+*
+       CMPA   #$1B
+       BEQ    CNTLEV
+*
+       STAA   FLAGK
+       BSR    OUTCH1   ECHO CHAR
+       PULB
+       RTS
+*
+* NO KEY CLOSED NOW GO TO USER ROUTINE
+* IF USER HAS KEY DOWN
+*    RETURN WITH CHAR IN A REG
+*           WITH CARRY = 1
+* ELSE RETURN WITH CARRY =0
+*
+*
+NONE   CLR    FLAGK
+SAME   CLC
+       JSR    USRINP
+       BCC    INCH0
+       PULB
+       RTS
+*
+CNTLEV JMP    CONTRL
+* (PG EJECT)   (PDF PG-77)
+**********
+* A,B,X UNCHANGED
+* IGNORES LF
+* CALLS "RETURN" IF C.R.
+* CALLS "INIT" IF FORM FEED
+* CALLS "SCROLL" IF BOTTOM
+*    OF DISPLAY RAM IS EXCEEDED
+* ELSE STORES CHAR
+**********
+OUTCH1 PSHB
+       PSHA
+       STX    SAVEX
+*
+*
+* CHECK IF END OF DISPLAY BUFF IS YES THEN SCROLL
+*
+MAIN1  LDX    NEXTBY
+       CPX    #VDGRAM+512
+       BNE    MAIN2
+       JSR    SCROLL
+*
+* CHECK FOR C.R. IF YES THEN FINISH LINE WITH BLANKS
+* TRAP L.F.'S
+*
+MAIN2  CMPA   #$0A
+       BEQ    MAIN6
+       CMPA   #$D
+       BNE    MAIN3
+       BSR    RETURN
+       LDAA   #$0A
+       BRA    MAIN1
+*
+*
+* CHECK FOR FORM FEED IF YES CLEAR SCREEN
+*
+MAIN3  CMPA   #$0C
+       BNE    MAIN4
+       BSR    INIT
+       BRA    MAIN7
+* (PG EJECT)  (PDF PG-78)
+*
+* CHECK FOR BACKSPACE IF YES MOVE POINTR BACK
+* & STORE INVERTED BLANK
+*
+MAIN4  CMPA   #$08
+       BNE    MAIN5
+       CPX    #VDGRAM
+       BEQ    MAIN6
+       DEX
+       LDAA   #$60
+       BSR    SAVE
+       BRA    MAIN6
+*
+* GET HERE TO SAVE THE BEGGAR..THEN HOME
+*
+MAIN5  EQU    *
+       BSR    SAVE
+       INX
+MAIN6  STX    NEXTBY
+MAIN7  LDX    SAVEX
+       PULA
+       PULB
+*
+* NOW GO TO USERS DISPLAY ROUTINE
+*...NOTE USER MUST EXECUTE A RTS
+* AS LAST INS
+       JMP    USROUT
+*
+* (PG EJECT)   (PDF PG-79)
+**********
+* A,B,X UNCHANGED
+* WAIT FOR LEADING EDGE OF
+*    FIELD SYNC(VERTICAL SYNC)
+*    THEN EXIT
+**********
+WAITFS EQU    *
+       PSHB
+WAIT2  LDAB   PIABD
+       ASLB
+       ASLB
+       BCC    WAIT2
+* GET NEG EDGE
+WAIT1  LDAB   PIABD
+       ASLB
+       ASLB
+       BCS    WAIT1
+       PULB
+       RTS
+* (PG EJECT)   (PDF PG-80)
+**********
+* ALL REGS ZAPPED
+* ON ENTRY A,B CONTAIN OFFSET
+*   TO BE ADDED TO (NEXTBY)
+* OFFSET WILL BE ADDED ONLY
+*   IF RESULT LOCATION WILL
+*   BE IN ACTIVE AREA OF
+*   DISPLAY RAM
+* ON EXIT A,B CONTAIN RESULT
+*   X = (NEXTBY) IF OK TO ADD
+*   X = X(N-1) IF NOT OK TO ADD
+**********
+UPDOWN ADDA   NEXTBY+1
+       ADCB   NEXTBY
+*
+       STAA   TEMP+1
+       STAB   TEMP
+*
+       CMPB   #VDGRAM/256
+       BLT    UD0
+       CMPB   #(VDGRAM+512)/256
+       BGE    UD0
+*
+       LDX    TEMP     OK TO ADJUST
+       STX    NEXTBY
+*
+UD0    RTS
+* (PG EJECT)  (PDF PG-81)
+*
+*
+* SAVE...COPIES BYTE
+* WAITS FOR HORIZ SYNC THEN STORES IN
+* DISPLAY RAM
+* NO REG KLOBBERED
+* ON ENTRY X REG POINTS TO LOC
+* IN DISPLAY MEMORY TO STORE CHAR
+* INTERRUPT IS MASKED BEFORE WRITE
+* TO VDG MEMORY THEN UN MASKED
+* (WE MUST WRITE DURING TV HORIZ RETRACE)
+*
+*
+SAVE   PSHB
+       SEI
+*
+SAVE0  LDAB   PIABD    WAIT FOR HS=1
+       BPL    SAVE0
+*
+SAVE1  LDAB   PIABD    NEGATIVE EDGE
+       BMI    SAVE1
+*
+* NOW CAN SAVE ( SCREEN BLANKED)
+*
+       STAA   0,X
+       CLI
+       PULB
+       RTS
+* (PG EJECT)   (PDF PG-82)
+**********
+* A,B UNCHANGED
+* FILLS CURRENT LINE WITH
+*   BLANKS FROM CURRENT
+*   POSITION (NEXTBY) TO
+*   END OF LINE
+* POINTER (NEXTBY) SET TO
+*   START OF NEXT LINE
+* ON EXIT X = (NEXTBY)
+**********
+RETURN LDX    NEXTBY
+*
+       PSHA
+RET1   LDAA   #$60
+       BSR    SAVE
+*
+* CONTINUE TO END OF LINE
+*
+       INX
+       STX   TEMP
+       LDAA  TEMP+1
+       ANDA  #$1F
+       BNE   RET1
+       STX   NEXTBY
+       PULA
+       RTS
+*
+* (PG EJECT)   (PDF PG-83)  -- end is -> pdf PG-90...
+**********
+* A,B UNCHENGED
+* PIA (ASCII KEYBOARD & VDG)
+*   IS CLEARED, SET FOR INPUT
+*   & SET FOR DATA REG ACCESS
+* ENTIRE SCREEN (512 BYTES) +
+*   ADDITIONAL 512 BYTES ARE
+* FILLED WITH BLANKS
+* ON EXIT X = (NEXTBY)
+**********
+INIT   CLR    PIABC
+       CLR    PIABD
+       CLR    FLAGK
+*
+       PSHA
+       LDAA   #$4      POINT AT DATA REG
+       STAA   PIABC
+*
+*
+* NOW BLANK SCREEN
+*
+       LDX    #VDGRAM
+       LDAA   #$60
+       STX    NEXTBY
+*
+INIT1  BSR    SAVE
+       INX
+       CPX    #VDGRAM+1024
+       BNE    INIT1
+       PULA
+       RTS
+* (PG EJECT)   (PDF PG-84)
+**********
+* A,B UNCHANGED
+* MOVES EACH CHAR UP 1 LINE
+*    (32 LOCATIONS)
+* TOP LINE IS LOST
+* BOTTOM LINE IS BLANK ON EXIT
+* (NEXTBY) IS DECREMENTED BY 32
+* ON EXIT X = (NEXTBY)
+**********
+SCROLL PSHA
+*
+       LDX    #VDGRAM
+*
+       PSHB
+       SEI
+SCROL3 LDAB   PIABD     WAIT FOR H-SYNC
+       BPL    SCROL3
+*
+SCROL4 LDAB   PIABD     TRAILING EDGE
+       BMI    SCROL4
+*
+       LDAA   32,X
+       BSR    SAVE
+       INX
+       CPX    #VDGRAM+512
+       BNE    SCROL3
+       LDX    #VDGRAM+480
+*
+       CLI
+       STX    NEXTBY
+       PULB
+       PULA
+       RTS
+* (PG EJECT)
+*
+*
+HEADMS FCB    $D
+       FCC    /NAME? /
+       FCB    4
+* (PG EJECT)
+*
+*
+*INTERRUPT VECTORS
+*
+       ORG    BASORG+$7F8
+       FDB    IO      // IRQ Interrupt (IOV)
+       FDB    SPEI    // LEVEL1 Software Interrupt (SWI1)
+       FDB    POWDWN  // NON-MASKABLE INTERRUPT (NIO)
+       FDB    START   // 6800 RESET Vector
+* (PG EJECT)
+*
+* RAM SCRATCHPAD FOR TVBUG..+ STACK
+*
+*
+       ORG    $F000
+       RMB    879      // reserve bytes,
+STACK  RMB    11       // stack goes top-down.
+*
+NBRBPT EQU    8        # OF BREAKPOINTS
+*
+*THE FOLLOWING ARE INITIALIZED AT START
+*
+IOV    RMB    2        I/O INTERRUPT POINTER
+BEGA   RMB    2        PRINT/PUNCH START LOC
+ENDA   RMB    2        PRINT/PUNCH STOP LOC
+NIO    RMB    2        NMI INTERRUPT POINTER
+SP     RMB    2        USER STACK POINTER
+SWI1   RMB    2        LEVEL1 SWI VECTOR
+SWI2   RMB    2        LEVEL2 SWI VECTOR
+BRINS  RMB    8        COND BRANCH STORAGE
+*
+* USER I/O VECTORS
+* INTIALIZED TO RTS
+* USER MUST END HIS ROUTINES
+* WITH RTS OR ALL IS LOST!!!
+*
+*
+USRINP RMB    3        USER INPUT ROUTINE
+USROUT RMB    3        USER OUTPUT ROUTINE
+*
+USR1   RMB    3
+USR2   RMB    3
+USR3   RMB    4
+*
+* A 16 BYTE PROM MAY BE PATCHED
+* OVER THE ABOVE 16 LOCATIONS.
+* USER VECTORS WILL THEN BE
+* AVAILABLE AT POWER ON.
+*
+BRANEN EQU    *
+* (PG EJECT)
+*
+* THE FOLLOWING ARE INITIALIZED TO ZERO
+*
+*
+TRCADR RMB    2        TRACE ADDRESS
+TRCINS RMB    1        PP CODE REPLACED BY TRACE
+NTRACE RMB    2        NO OF INS TO TRACE
+*
+BRKADR RMB    NBRBPT*2 BREAKPOINT TABLE
+BRKINS RMB    NBRBPT*2 OP CODES FOR BREAK
+*
+ASAVE  RMB    1
+TEMP   RMB    2
+TEMP2  RMB    2
+SAVEX  RMB    1
+NEXTBY RMB    2
+XHI    RMB    1
+XLOW   RMB    1
+SSAVE  RMB    2
+CHRCNT RMB    1
+TERMCH RMB    1
+VFLAG  RMB    1
+OFFADR RMB    2
+FLAGK  RMB    1
+BRKSIN RMB    1        1=BREAKS IN USER CODE
+BRKTRC RMB    1        1=P-COUNTER IS AT BREAKPOINT
+*             & USER WANTS TO CONTINUE---
+*                    ONE TRACE WILL BE DONE
+*             & BREAKS RESTORED
+ENDIN0 EQU    *
+HEADBF RMB    32
+* (PG EJECT)   (PDF PG-90)
+* END
